@@ -1,0 +1,1 @@
+powershell Compress-Archive main.exe,WebView2Loader.dll main.zip
