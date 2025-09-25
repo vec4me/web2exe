@@ -1,1 +1,2 @@
-powershell Compress-Archive main.exe,WebView2Loader.dll main.zip
+cd build/
+powershell Compress-Archive neighbours.exe,WebView2Loader.dll neighbours.zip -Force
