@@ -1,6 +1,8 @@
 #define UNICODE
 #define _UNICODE
-#include <windows.h>
+#include <Windows.h>
+#include <stdint.h>
+#include <string.h>
 #include <WebView2.h>
 
 ICoreWebView2Environment* g_env = NULL;
@@ -23,10 +25,10 @@ struct ControllerHandler {
 
 ULONG STDMETHODCALLTYPE Controller_AddRef(ControllerHandler* This) { return ++This->ref; }
 ULONG STDMETHODCALLTYPE Controller_Release(ControllerHandler* This) { return --This->ref; }
-HRESULT STDMETHODCALLTYPE Controller_QueryInterface(ControllerHandler* This, REFIID riid, void** ppvObject) {
-    *ppvObject = NULL;
-    return E_NOINTERFACE;
-}
+HRESULT STDMETHODCALLTYPE Controller_QueryInterface(ControllerHandler* This, REFIID riid, void** ppvObject) { *ppvObject = NULL; return E_NOINTERFACE; }
+
+static const char html_data[] = { /*HTML_DATA_PLACEHOLDER*/ };
+static const size_t html_data_len = /*HTML_LEN_PLACEHOLDER*/;
 
 HRESULT STDMETHODCALLTYPE Controller_Invoke(ControllerHandler* This, HRESULT result, ICoreWebView2Controller* controller) {
     if (FAILED(result) || !controller) return result;
@@ -34,13 +36,17 @@ HRESULT STDMETHODCALLTYPE Controller_Invoke(ControllerHandler* This, HRESULT res
     g_controller->lpVtbl->AddRef(g_controller);
 
     g_controller->lpVtbl->get_CoreWebView2(g_controller, &g_webview);
-    if (g_webview) {
-        g_controller->lpVtbl->put_IsVisible(g_controller, TRUE);
-        RECT bounds;
-        GetClientRect(g_hwnd, &bounds);
-        g_controller->lpVtbl->put_Bounds(g_controller, bounds);
-        g_webview->lpVtbl->NavigateToString(g_webview, L"<html></html>");
-    }
+    if (!g_webview) return S_OK;
+
+    g_controller->lpVtbl->put_IsVisible(g_controller, TRUE);
+    RECT bounds;
+    GetClientRect(g_hwnd, &bounds);
+    g_controller->lpVtbl->put_Bounds(g_controller, bounds);
+
+    static wchar_t html_w[/*HTML_LEN_PLACEHOLDER*/];
+    MultiByteToWideChar(CP_UTF8, 0, html_data, (int)html_data_len, html_w, sizeof(html_w)/sizeof(wchar_t));
+
+    g_webview->lpVtbl->NavigateToString(g_webview, html_w);
     return S_OK;
 }
 
@@ -62,10 +68,7 @@ struct EnvHandler {
 
 ULONG STDMETHODCALLTYPE Env_AddRef(EnvHandler* This) { return ++This->ref; }
 ULONG STDMETHODCALLTYPE Env_Release(EnvHandler* This) { return --This->ref; }
-HRESULT STDMETHODCALLTYPE Env_QueryInterface(EnvHandler* This, REFIID riid, void** ppvObject) {
-    *ppvObject = NULL;
-    return E_NOINTERFACE;
-}
+HRESULT STDMETHODCALLTYPE Env_QueryInterface(EnvHandler* This, REFIID riid, void** ppvObject) { *ppvObject = NULL; return E_NOINTERFACE; }
 
 HRESULT STDMETHODCALLTYPE Env_Invoke(EnvHandler* This, HRESULT result, ICoreWebView2Environment* env) {
     if (FAILED(result) || !env) return result;
