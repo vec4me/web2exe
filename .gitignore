@@ -1,4 +1,2 @@
-*.dll
 *.exe
-build/*
-index.html
+*.html
