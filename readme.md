@@ -23,7 +23,7 @@ $ ./web2exe game.html    # This builds your game into an executable.
 $ wine game.exe
 ```
 
-**The repository may live wherever you wish, and `web2exe` can be invoked from inside the folder.**
+**The repository may live wherever you wish, and `web2exe` can be invoked from outside the folder.**
 
 ![](lineage/Screenshot%202025-10-20%20113851.png)
 
