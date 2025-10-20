@@ -1,25 +1,39 @@
 #!/bin/bash
 set -euo pipefail
 
+# Input check
+[[ $# -lt 1 ]] && { echo "Usage: $0 <html_file>"; exit 1; }
+INPUT="$1"
+[[ ! -f "$INPUT" ]] && { echo "Error: $INPUT does not exist"; exit 1; }
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+OUT_DIR="$PWD"
+
+# Handle .html or .htm
+BASENAME=$(basename "$INPUT")
+BASENAME=${BASENAME%.html}
+BASENAME=${BASENAME%.htm}
+TITLE=$(grep -ioP '(?<=<title>).*?(?=</title>)' "$INPUT" || echo "$BASENAME")
+
 mkdir -p /tmp/web2exe
 
-# --- Windows SDK download ---
-if [[ ! -f /tmp/web2exe/.sdk_download_complete ]]; then
+# Windows SDK download
+[[ ! -f /tmp/web2exe/.sdk_download_complete ]] && {
     echo "→ Downloading Windows SDK..."
     mkdir -p /tmp/web2exe/xwin
     xwin --cache-dir /tmp/web2exe/xwin --arch x86 download
     touch /tmp/web2exe/.sdk_download_complete
-fi
+}
 
-# --- Windows SDK splat ---
-if [[ ! -f /tmp/web2exe/.sdk_splat_complete ]]; then
+# Windows SDK splat
+[[ ! -f /tmp/web2exe/.sdk_splat_complete ]] && {
     echo "→ Installing Windows SDK (splat)..."
     xwin --cache-dir /tmp/web2exe/xwin --arch x86 splat
     touch /tmp/web2exe/.sdk_splat_complete
-fi
+}
 
-# --- WebView2 SDK ---
-if [[ ! -f /tmp/web2exe/.webview2_complete ]]; then
+# WebView2 download & unpack
+[[ ! -f /tmp/web2exe/.webview2_complete ]] && {
     echo "→ Downloading & unpacking WebView2 SDK..."
     rm -rf /tmp/web2exe/webview2
     mkdir -p /tmp/web2exe/webview2
@@ -27,31 +41,16 @@ if [[ ! -f /tmp/web2exe/.webview2_complete ]]; then
     unzip -q /tmp/web2exe/webview2.nupkg -d /tmp/web2exe/webview2
     rm /tmp/web2exe/webview2.nupkg
     touch /tmp/web2exe/.webview2_complete
-fi
+}
 
-# --- Input check ---
-if [[ $# -lt 1 ]]; then
-    echo "Usage: $0 <html_file>"
-    exit 1
-fi
-if [[ ! -f "$1" ]]; then
-    echo "Error: $1 does not exist"
-    exit 1
-fi
-
-# --- Extract title ---
-TITLE=$(grep -ioP '(?<=<title>).*?(?=</title>)' "$1" || true)
-TITLE=${TITLE:-$(basename "$1" .html)}
-TITLE=$(echo "$TITLE" | xargs)
-
-# --- Convert to byte arrays ---
-HTML_BYTES=$(hexdump -v -e '1/1 "0x%02X, "' "$1" | sed 's/, $//')
+# Convert files to byte arrays
+HTML_BYTES=$(hexdump -v -e '1/1 "0x%02X, "' "$INPUT" | sed 's/, $//')
 DLL_BYTES=$(hexdump -v -e '1/1 "0x%02X, "' /tmp/web2exe/webview2/runtimes/win-x86/native/WebView2Loader.dll | sed 's/, $//')
-HTML_LEN=$(stat -c %s "$1")
+HTML_LEN=$(stat -c %s "$INPUT")
 DLL_LEN=$(stat -c %s /tmp/web2exe/webview2/runtimes/win-x86/native/WebView2Loader.dll)
 
-# --- Generate C source ---
-SOURCE=$(<index.c)
+# Prepare source code
+SOURCE=$(<"$SCRIPT_DIR/index.c")
 SOURCE=${SOURCE//"/*HTML_DATA_PLACEHOLDER*/"/$HTML_BYTES}
 SOURCE=${SOURCE//"/*HTML_LEN_PLACEHOLDER*/"/$HTML_LEN}
 SOURCE=${SOURCE//"/*DLL_DATA_PLACEHOLDER*/"/$DLL_BYTES}
@@ -59,7 +58,7 @@ SOURCE=${SOURCE//"/*DLL_LEN_PLACEHOLDER*/"/$DLL_LEN}
 SOURCE=${SOURCE//"/*WINDOW_NAME*/"/$TITLE}
 echo "$SOURCE" > /tmp/web2exe/"$TITLE".c
 
-# --- Compile ---
+# Compile
 clang -std=c89 -Os -ffunction-sections -fdata-sections \
     -I /tmp/web2exe/xwin/splat/crt/include/ \
     -I /tmp/web2exe/xwin/splat/sdk/include/shared/ \
@@ -70,7 +69,8 @@ clang -std=c89 -Os -ffunction-sections -fdata-sections \
     --target=i686-pc-windows-msvc \
     -c /tmp/web2exe/"$TITLE".c -o /tmp/web2exe/"$TITLE".obj
 
-lld-link /OUT:"$TITLE".exe /SUBSYSTEM:WINDOWS /BREPRO /NODEFAULTLIB \
+# Link executable
+lld-link /OUT:"$OUT_DIR/$TITLE.exe" /SUBSYSTEM:WINDOWS /BREPRO /NODEFAULTLIB \
     /LIBPATH:/tmp/web2exe/xwin/splat/crt/lib/x86/ \
     /LIBPATH:/tmp/web2exe/xwin/splat/sdk/lib/ucrt/x86/ \
     /LIBPATH:/tmp/web2exe/xwin/splat/sdk/lib/um/x86/ \
